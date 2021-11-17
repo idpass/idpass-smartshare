@@ -29,6 +29,9 @@ import com.goterl.lazysodium.utils.Key;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+/**
+ * The wrapper class that uses Libsodium's cryptographic primitives.
+ */
 public class EncryptionUtils {
     private static final String TAG = EncryptionUtils.class.getName();
     private SodiumAndroid sodium;
@@ -44,6 +47,9 @@ public class EncryptionUtils {
         regenerateKeyPair();
     }
 
+    /**
+     * Initializes new ED25519 key pairs.
+     */
     public void regenerateKeyPair() {
         publicKeyED25519 = new byte[Sign.ED25519_PUBLICKEYBYTES];
         secretKeyED25519 = new byte[Sign.ED25519_SECRETKEYBYTES];
@@ -56,6 +62,10 @@ public class EncryptionUtils {
         status = sodium.crypto_sign_ed25519_sk_to_curve25519(secretKeyCurve25519, secretKeyED25519);
     }
 
+    /**
+     * Returns the ED25519 public key as a string
+     * @return The ED25519 public key in hex string format
+     */
     public String getPublicKeyED25519AsString() {
         // Hex string to byte[]
         // String pubKeyStr = "FACE42 ... DEC0DE";
@@ -63,6 +73,15 @@ public class EncryptionUtils {
         return LazySodium.toHex(publicKeyED25519);
     }
 
+    /**
+     * This is used in the key exchange handshake. It verifies a correctly computed
+     * keyed hash of a public key payload field using the derived secret key between
+     * the two devices.
+     * @param kex The message type for this handshake message
+     * @return Returns true if the keyed hash matches
+     * @throws JSONException
+     * @throws SodiumException
+     */
     public boolean verifyKexJson(String kex) throws JSONException, SodiumException {
         JSONObject json = new JSONObject(kex);
         String pk = json.getString("pk");
@@ -83,6 +102,15 @@ public class EncryptionUtils {
         return computedHash.equals(hash);
     }
 
+    /**
+     * Creates a kex handshake message to send a public key to peer. It's verifiability
+     * is through a keyed hash using the derived secret key of the two devices.
+     * @param myPubKey The public key to send to remote peer
+     * @param peerPubKey The remote peer's public key
+     * @return Returns a key handshake message
+     * @throws JSONException
+     * @throws SodiumException
+     */
     public String createKexJson(String myPubKey, String peerPubKey) throws JSONException, SodiumException {
         byte[] ed25519 = LazySodium.toBin(peerPubKey);
         byte[] curve25519 = new byte[Sign.CURVE25519_PUBLICKEYBYTES];
@@ -105,6 +133,14 @@ public class EncryptionUtils {
         return json.toString();
     }
 
+    /**
+     * Encrypts the UIN through a shared key between the two devices.
+     * @param uin The UIN plaintext to encrypt
+     * @param pubkeyED25519 The remote peer's ED25519 public key
+     * @return Returns a structured message with an encrypted UIN field
+     * @throws JSONException
+     * @throws SodiumException
+     */
     public String encrypt(String uin, String pubkeyED25519) throws JSONException, SodiumException {
         DiffieHellman.Lazy dh = (DiffieHellman.Lazy)lazySodium;
         SecretBox.Lazy box = (SecretBox.Lazy)lazySodium;
@@ -123,6 +159,13 @@ public class EncryptionUtils {
         return json.toString();
     }
 
+    /**
+     * Decrypts the euin ciphertext field of the structured message.
+     * @param jsonPayload The received structured message
+     * @return Returns the UIN string in plaintext
+     * @throws JSONException
+     * @throws SodiumException
+     */
     public String decrypt(String jsonPayload) throws JSONException, SodiumException {
         DiffieHellman.Lazy dh = (DiffieHellman.Lazy)lazySodium;
         SecretBox.Lazy box = (SecretBox.Lazy)lazySodium;
@@ -147,7 +190,9 @@ public class EncryptionUtils {
         return uin;
     }
 
-    // Debug key pair to bypass QR code and debug Bluetooth
+    /**
+     * This is a debug key pair to bypass QR code and debug Bluetooth
+     */
     public void regenerateKeyPairDebug() {
         String pkDebug = "14EEF98AFF6AAB9D8DB7874D79C9E96BE51D2158F7FB11D5FF7E08BCC01FDA4F";
         String skDebug = "303132333435363738394142434445463031323334353637383941424344454614EEF98AFF6AAB9D8DB7874D79C9E96BE51D2158F7FB11D5FF7E08BCC01FDA4F";
@@ -166,6 +211,13 @@ public class EncryptionUtils {
         sodium.crypto_sign_ed25519_sk_to_curve25519(secretKeyCurve25519, secretKeyED25519);
     }
 
+    /**
+     * Converts an ED25519 public key to Curve25519 public key. The Curve25519 key
+     * will be used for encryption.
+     * @param edPub An ED25519 public key in hex string representation
+     * @return Returns the equivalent Curve25519 public key
+     * @throws SodiumException
+     */
     private String edPub2curvePub(String edPub) throws SodiumException {
         byte[] ed25519 = LazySodium.toBin(edPub);
         byte[] curve25519 = new byte[Sign.CURVE25519_PUBLICKEYBYTES];

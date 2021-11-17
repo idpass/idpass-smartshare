@@ -41,6 +41,10 @@ import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
 
+/**
+ * The transport layer that is secured by Android's Nearby implementation.
+ * The payload is secured by Libsodium's cryptographic library.
+ */
 public class BluetoothSecure {
 
     @FunctionalInterface
@@ -114,12 +118,20 @@ public class BluetoothSecure {
         }
     };
 
+    /**
+     * Propagates debugging messages to the application.
+     * @param s A debug message
+     */
     private void emitEventLog(String s) {
         if (onLogCallback != null) {
             onLogCallback.invoke(s);
         }
     }
 
+    /**
+     * Propagates Bluetooth events to the application.
+     * @param s A json structured event object
+     */
     private void emitEventNearby(String s) {
         if (onNearbyCallback != null) {
             onNearbyCallback.invoke(s);
@@ -199,6 +211,12 @@ public class BluetoothSecure {
         encryptionUtils = new EncryptionUtils();
     }
 
+    /**
+     * Initialization method to set an Activity and callback functions.
+     * @param activity The main application's Activity object
+     * @param logCallback Callback function to handle log messages for debug tracing
+     * @param nearbyCallback Callback function to handle Bluetooth events
+     */
     public void init(Activity activity, LogCallback logCallback, NearbyCallback nearbyCallback) {
         emitEventLog("BluetoothSecure::init"); // logger not yet
         link = Nearby.getConnectionsClient(activity);
@@ -208,6 +226,10 @@ public class BluetoothSecure {
         onSendCallback = null;
     }
 
+    /**
+     * The main parser to handle different types of messages.
+     * @param msg The received structured message
+     */
     private void handleMessage(String msg) {
         try {
             JSONObject msgObj = new JSONObject(msg);
@@ -241,6 +263,11 @@ public class BluetoothSecure {
         }
     }
 
+    /**
+     * Part of the key exchange handshake to exchange a
+     * key hashed public key to remote peer. This happens
+     * at connection creation.
+     */
     private void sendPublicKey()
     {
         emitEventLog("sendPublicKey");
@@ -254,6 +281,11 @@ public class BluetoothSecure {
         }
     }
 
+    /**
+     * Starts/restarts the Bluetooth signalling based on mode.
+     * @param mode The type of signalling mode to use.
+     * @return Returns true if the signalling has started
+     */
     private boolean startMode(String mode) {
         boolean flag = false;
         emitEventLog("createConnection:" + mode + "/" + connectionId);
@@ -293,6 +325,11 @@ public class BluetoothSecure {
 
     // APIs
 
+    /**
+     * API used to generate a randomized Bluetooth connectionId and
+     * ED25519 key pair.
+     * @return
+     */
     public String getConnectionParameters() {
         emitEventLog("getConnectionParameters");
         JSONObject json = new JSONObject();
@@ -312,6 +349,11 @@ public class BluetoothSecure {
         return "";
     }
 
+    /**
+     * API used to set a specific connectionId. This also
+     * re-generates the underlying ED25519 key pair.
+     * @param params The target Bluetooth connection ID
+     */
     public void setConnectionParameters(String params) {
         emitEventLog("setConnectionParameters"); // logger not yet binded
         try {
@@ -333,6 +375,11 @@ public class BluetoothSecure {
         }
     }
 
+    /**
+     * This is for debugging purposes only. It is used to quickly setup
+     * the Bluetooth connection ID and ED25519 key pairs for testing purposes.
+     * @return Returns a pre-defined connection code parameters
+     */
     public String getConnectionParametersDebug() {
         JSONObject json = new JSONObject();
         try {
@@ -349,6 +396,14 @@ public class BluetoothSecure {
         return "";
     }
 
+    /**
+     * Once the connection parameters are acquired and set, the next
+     * phase is to attempt to establish an RF link on top of which
+     * a connection shall be created.
+     * @param mode The Bluetooth signalling mode during RF link establishment
+     * @param callback This callback will be invoked when a connection is successfully created.
+     * @return Returns true if the signalling is in-progress
+     */
     public boolean createConnection(String mode, ConnectionCreatedCallback callback) {
         Log.d(TAG, "[+createConnection]");
         onConnectionCreatedCallback = callback;
@@ -356,6 +411,11 @@ public class BluetoothSecure {
         return startMode(mode);
     }
 
+    /**
+     * Sends a string message to the connected peer.
+     * @param msg The plaintext message to send
+     * @param callback This callback is invoked when the message is sent
+     */
     public void send(String msg, SendCallback callback) {
         emitEventLog("send");
         onSendCallback = callback;
@@ -374,6 +434,10 @@ public class BluetoothSecure {
         }
     }
 
+    /**
+     * Shuts down the RF link between the two devices, and
+     * consequently destroys the connection between them.
+     */
     public void destroyConnection() {
         emitEventLog("destroyConnection");
         link.disconnectFromEndpoint(receiverEndpointId);
