@@ -21,7 +21,7 @@ obj.init(getCurrentActivity(),
 );
 ```
 
-The first app must call [getConnectionParameters](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L131-L155):
+The first app must call [getConnectionParameters](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L144-L166):
 
 ```java
 String params = obj.getConnectionParameters();
@@ -35,7 +35,7 @@ obj.createConnection("dual", () -> {
 });
 ```
 
-The second app must call [setConnectionParameters](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L179-L189):
+The second app must call [setConnectionParameters](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L191-L201):
 
 ```java
 // Get the `params` connection code. For example, visually through
@@ -51,7 +51,7 @@ obj.createConnection("dual", () -> {
 
 
 
-When a connection is created, either app can [send](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L216-L222) a message by:
+When a connection is created, either app can [send](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L231-L237) a message by:
 
 ```java
 obj.send(msg, () -> {
