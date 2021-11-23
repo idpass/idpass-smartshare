@@ -60,7 +60,7 @@ obj.send(msg, () -> {
 
 ```
 
-The incoming messages, the transfer status of inbound/outbound messages, the connection-related events, and the debug log messages are handled in the callback functions specified in `init`. The [example](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L82-L109) test application shows the handling of these events. 
+The incoming messages, the transfer status of inbound/outbound messages, the connection-related events, and the debug log messages are handled in the callback functions specified in `init`. The [example](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L87-L121) test application shows the handling of these events. 
 
 The mechanism to communicate the `params` connection code is up to the application. Such mechanism would include, but is not limited to, through a QR code.
 
