@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.idpass.smartshare.bluetooth;
+package org.idpass.smartshare.connection;
 
 import com.goterl.lazysodium.LazySodium;
 import com.goterl.lazysodium.LazySodiumAndroid;
