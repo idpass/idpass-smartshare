@@ -32,10 +32,10 @@ public class Utils {
     static public void pause(int nsec) {
         int pauseSeconds = nsec;
         // Randomize it if not supplied
-        if (pauseSeconds  <= 0) {
+        if (pauseSeconds <= 0) {
             Random ran = new Random();
             pauseSeconds = 9 + ran.nextInt(30);
-            Log.d(TAG,"pause " + pauseSeconds);
+            Log.d(TAG, "pause " + pauseSeconds);
         }
 
         try {
@@ -63,7 +63,8 @@ public class Utils {
         try {
             event.put("type", type);
             event.put("data", data);
-        } catch (JSONException e) {}
+        } catch (JSONException e) {
+        }
         return event.toString();
     }
 

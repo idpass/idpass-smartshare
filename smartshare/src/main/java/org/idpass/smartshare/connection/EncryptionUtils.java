@@ -64,6 +64,7 @@ public class EncryptionUtils {
 
     /**
      * Returns the ED25519 public key as a string
+     *
      * @return The ED25519 public key in hex string format
      */
     public String getPublicKeyED25519AsString() {
@@ -74,6 +75,7 @@ public class EncryptionUtils {
      * This is used in the key exchange handshake. It verifies a correctly computed
      * keyed hash of a public key payload field using the derived secret key between
      * the two devices.
+     *
      * @param kex The message type for this handshake message
      * @return Returns true if the keyed hash matches
      * @throws JSONException
@@ -90,7 +92,7 @@ public class EncryptionUtils {
             throw new SodiumException("error: ED25519 to Curve25519 Conversion");
         }
 
-        DiffieHellman.Lazy dh = (DiffieHellman.Lazy)lazySodium;
+        DiffieHellman.Lazy dh = (DiffieHellman.Lazy) lazySodium;
         Key publicKey = Key.fromBytes(curve25519);
         Key secretKey = Key.fromBytes(secretKeyCurve25519);
         Key sharedKey = dh.cryptoScalarMult(secretKey, publicKey);
@@ -102,7 +104,8 @@ public class EncryptionUtils {
     /**
      * Creates a kex handshake message to send a public key to peer. It's verifiability
      * is through a keyed hash using the derived secret key of the two devices.
-     * @param myPubKey The public key to send to remote peer
+     *
+     * @param myPubKey   The public key to send to remote peer
      * @param peerPubKey The remote peer's public key
      * @return Returns a key handshake message
      * @throws JSONException
@@ -115,7 +118,7 @@ public class EncryptionUtils {
             throw new SodiumException("error: ED25519 to Curve25519 Conversion");
         }
 
-        DiffieHellman.Lazy dh = (DiffieHellman.Lazy)lazySodium;
+        DiffieHellman.Lazy dh = (DiffieHellman.Lazy) lazySodium;
         Key publicKey = Key.fromBytes(curve25519);
         Key secretKey = Key.fromBytes(secretKeyCurve25519);
         Key sharedKey = dh.cryptoScalarMult(secretKey, publicKey);
@@ -132,15 +135,16 @@ public class EncryptionUtils {
 
     /**
      * Encrypts the payload through a shared key between the two devices.
-     * @param payload The payload plaintext to encrypt
+     *
+     * @param payload       The payload plaintext to encrypt
      * @param pubkeyED25519 The remote peer's ED25519 public key
      * @return Returns a structured message with an encrypted payload field
      * @throws JSONException
      * @throws SodiumException
      */
     public String encrypt(String payload, String pubkeyED25519) throws JSONException, SodiumException {
-        DiffieHellman.Lazy dh = (DiffieHellman.Lazy)lazySodium;
-        SecretBox.Lazy box = (SecretBox.Lazy)lazySodium;
+        DiffieHellman.Lazy dh = (DiffieHellman.Lazy) lazySodium;
+        SecretBox.Lazy box = (SecretBox.Lazy) lazySodium;
         Key publicKey = Key.fromHexString(edPub2curvePub(pubkeyED25519));
         Key secretKey = Key.fromBytes(secretKeyCurve25519);
         Key sharedKey = dh.cryptoScalarMult(secretKey, publicKey);
@@ -158,14 +162,15 @@ public class EncryptionUtils {
 
     /**
      * Decrypts the encrypted payload field of the structured message.
+     *
      * @param jsonPayload The received structured message
      * @return Returns the payload string in plaintext
      * @throws JSONException
      * @throws SodiumException
      */
     public String decrypt(String jsonPayload) throws JSONException, SodiumException {
-        DiffieHellman.Lazy dh = (DiffieHellman.Lazy)lazySodium;
-        SecretBox.Lazy box = (SecretBox.Lazy)lazySodium;
+        DiffieHellman.Lazy dh = (DiffieHellman.Lazy) lazySodium;
+        SecretBox.Lazy box = (SecretBox.Lazy) lazySodium;
 
         JSONObject json = new JSONObject(jsonPayload);
         String pubkey = json.get("pk").toString();
@@ -211,6 +216,7 @@ public class EncryptionUtils {
     /**
      * Converts an ED25519 public key to Curve25519 public key. The Curve25519 key
      * will be used for encryption.
+     *
      * @param edPub An ED25519 public key in hex string representation
      * @return Returns the equivalent Curve25519 public key
      * @throws SodiumException

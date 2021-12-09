@@ -92,7 +92,7 @@ public class BluetoothSecure {
     private final PayloadCallback payloadHandler = new PayloadCallback() {
         @Override
         public void onPayloadReceived(@NonNull String endpointId, @NonNull Payload payload) {
-            Log.d(TAG,"onPayloadReceived:" + endpointId);
+            Log.d(TAG, "onPayloadReceived:" + endpointId);
             if (payload.getType() == Payload.Type.BYTES) {
                 String msg = new String(payload.asBytes(), StandardCharsets.UTF_8);
                 emitEventLog("onPayloadReceived:" + endpointId);
@@ -105,7 +105,7 @@ public class BluetoothSecure {
         @Override
         public void onPayloadTransferUpdate(@NonNull String endpointId, @NonNull PayloadTransferUpdate payloadTransferUpdate) {
             int status = payloadTransferUpdate.getStatus();
-            Log.d(TAG,String.format("onPayloadTransferUpdate:%s/%d", endpointId, status));
+            Log.d(TAG, String.format("onPayloadTransferUpdate:%s/%d", endpointId, status));
             emitEventLog(String.format("onPayloadTransferUpdate:%s/%d", endpointId, status));
             emitEventNearby(Utils.eventJson("transferupdate", transferUpdate[status - 1]));
 
@@ -120,6 +120,7 @@ public class BluetoothSecure {
 
     /**
      * Propagates debugging messages to the application.
+     *
      * @param s A debug message
      */
     private void emitEventLog(String s) {
@@ -130,6 +131,7 @@ public class BluetoothSecure {
 
     /**
      * Propagates Bluetooth events to the application.
+     *
      * @param s A json structured event object
      */
     private void emitEventNearby(String s) {
@@ -203,7 +205,7 @@ public class BluetoothSecure {
         public void onDisconnected(@NonNull String endpointId) {
             Log.d(TAG, "onDisconnected: " + endpointId);
             emitEventLog("onDisconnected");
-            emitEventNearby(Utils.eventJson("onDisconnected",endpointId));
+            emitEventNearby(Utils.eventJson("onDisconnected", endpointId));
         }
     };
 
@@ -213,8 +215,9 @@ public class BluetoothSecure {
 
     /**
      * Initialization method to set an Activity and callback functions.
-     * @param activity The main application's Activity object
-     * @param logCallback Callback function to handle log messages for debug tracing
+     *
+     * @param activity       The main application's Activity object
+     * @param logCallback    Callback function to handle log messages for debug tracing
      * @param nearbyCallback Callback function to handle Bluetooth events
      */
     public void init(Activity activity, LogCallback logCallback, NearbyCallback nearbyCallback) {
@@ -228,6 +231,7 @@ public class BluetoothSecure {
 
     /**
      * The main parser to handle different types of messages.
+     *
      * @param msg The received structured message
      */
     private void handleMessage(String msg) {
@@ -237,24 +241,24 @@ public class BluetoothSecure {
             emitEventLog("handleMessage:" + type);
             switch (type) {
                 case "msg":
-                String uin = encryptionUtils.decrypt(msg);
-                emitEventNearby(Utils.eventJson("msg", uin));
-                break;
+                    String uin = encryptionUtils.decrypt(msg);
+                    emitEventNearby(Utils.eventJson("msg", uin));
+                    break;
 
                 case "kex":
-                if (encryptionUtils.verifyKexJson(msg)) {
-                    String pk = msgObj.get("pk").toString();
-                    // emitEventNearby(Utils.eventJson("kex", pk));
-                    this.peerPublicKey = pk;
-                    emitEventLog("kex success");
-                } else {
-                    emitEventLog("kex fail");
-                }
-                break;
+                    if (encryptionUtils.verifyKexJson(msg)) {
+                        String pk = msgObj.get("pk").toString();
+                        // emitEventNearby(Utils.eventJson("kex", pk));
+                        this.peerPublicKey = pk;
+                        emitEventLog("kex success");
+                    } else {
+                        emitEventLog("kex fail");
+                    }
+                    break;
 
                 default:
-                emitEventLog("not handleMessage: " + type);
-                break;
+                    emitEventLog("not handleMessage: " + type);
+                    break;
             }
         } catch (JSONException e) {
             emitEventLog("error: handleMessage json");
@@ -268,14 +272,13 @@ public class BluetoothSecure {
      * key hashed public key to remote peer. This happens
      * at connection creation.
      */
-    private void sendPublicKey()
-    {
+    private void sendPublicKey() {
         emitEventLog("sendPublicKey");
         String publicKeyStr = encryptionUtils.getPublicKeyED25519AsString();
         try {
             String kexJson = encryptionUtils.createKexJson(publicKeyStr, peerPublicKey);
             link.sendPayload(receiverEndpointId,
-                Payload.fromBytes(kexJson.getBytes(StandardCharsets.UTF_8)));
+                    Payload.fromBytes(kexJson.getBytes(StandardCharsets.UTF_8)));
         } catch (JSONException | SodiumException e) {
             emitEventLog("sendPublicKey error");
         }
@@ -283,6 +286,7 @@ public class BluetoothSecure {
 
     /**
      * Starts/restarts the Bluetooth signalling based on mode.
+     *
      * @param mode The type of signalling mode to use.
      * @return Returns true if the signalling has started
      */
@@ -292,26 +296,26 @@ public class BluetoothSecure {
         switch (mode) {
             case "dual":
                 link.startAdvertising(codeName,
-                    connectionId, lifecycleHandler,
-                    new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
+                        connectionId, lifecycleHandler,
+                        new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
 
                 link.startDiscovery(
-                    connectionId, discoveryHandler,
-                    new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
+                        connectionId, discoveryHandler,
+                        new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
                 flag = true;
                 break;
 
             case "discoverer":
                 link.startDiscovery(
-                    connectionId, discoveryHandler,
-                    new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
+                        connectionId, discoveryHandler,
+                        new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
                 flag = true;
                 break;
 
             case "advertiser":
                 link.startAdvertising(codeName,
-                    connectionId, lifecycleHandler,
-                    new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
+                        connectionId, lifecycleHandler,
+                        new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
                 flag = true;
                 break;
 
@@ -328,6 +332,7 @@ public class BluetoothSecure {
     /**
      * API used to generate a randomized Bluetooth connectionId and
      * ED25519 key pair.
+     *
      * @return
      */
     public String getConnectionParameters() {
@@ -338,7 +343,7 @@ public class BluetoothSecure {
             String publicKeyStr = encryptionUtils.getPublicKeyED25519AsString();
             String cid = Utils.getRandomString(5);
             json.put("cid", cid);
-            json.put("pk",publicKeyStr);
+            json.put("pk", publicKeyStr);
             this.connectionId = cid;
             doKex = false;
             return json.toString();
@@ -352,6 +357,7 @@ public class BluetoothSecure {
     /**
      * API used to set a specific connectionId. This also
      * re-generates the underlying ED25519 key pair.
+     *
      * @param params The target Bluetooth connection ID
      */
     public void setConnectionParameters(String params) {
@@ -378,6 +384,7 @@ public class BluetoothSecure {
     /**
      * This is for debugging purposes only. It is used to quickly setup
      * the Bluetooth connection ID and ED25519 key pairs for testing purposes.
+     *
      * @return Returns a pre-defined connection code parameters
      */
     public String getConnectionParametersDebug() {
@@ -386,7 +393,7 @@ public class BluetoothSecure {
             encryptionUtils.regenerateKeyPairDebug();
             String publicKeyStr = encryptionUtils.getPublicKeyED25519AsString();
             json.put("cid", "id3nt");
-            json.put("pk",publicKeyStr);
+            json.put("pk", publicKeyStr);
             doKex = false;
             return json.toString();
         } catch (JSONException e) {
@@ -400,7 +407,8 @@ public class BluetoothSecure {
      * Once the connection parameters are acquired and set, the next
      * phase is to attempt to establish an RF link on top of which
      * a connection shall be created.
-     * @param mode The Bluetooth signalling mode during RF link establishment
+     *
+     * @param mode     The Bluetooth signalling mode during RF link establishment
      * @param callback This callback will be invoked when a connection is successfully created.
      * @return Returns true if the signalling is in-progress
      */
@@ -413,17 +421,18 @@ public class BluetoothSecure {
 
     /**
      * Sends a string message to the connected peer.
-     * @param msg The plaintext message to send
+     *
+     * @param msg      The plaintext message to send
      * @param callback This callback is invoked when the message is sent
      */
     public void send(String msg, SendCallback callback) {
         emitEventLog("send");
         onSendCallback = callback;
         try {
-            if (peerPublicKey != null && peerPublicKey.length()> 0) {
+            if (peerPublicKey != null && peerPublicKey.length() > 0) {
                 String encrypted = encryptionUtils.encrypt(msg, peerPublicKey);
                 link.sendPayload(receiverEndpointId,
-                    Payload.fromBytes(encrypted.getBytes(StandardCharsets.UTF_8)));
+                        Payload.fromBytes(encrypted.getBytes(StandardCharsets.UTF_8)));
             } else {
                 emitEventLog("error peerPublicKey");
             }
