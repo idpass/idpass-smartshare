@@ -67,9 +67,6 @@ public class EncryptionUtils {
      * @return The ED25519 public key in hex string format
      */
     public String getPublicKeyED25519AsString() {
-        // Hex string to byte[]
-        // String pubKeyStr = "FACE42 ... DEC0DE";
-        // byte[] buf = LazySodium.toBin(pubKeyStr);
         return LazySodium.toHex(publicKeyED25519);
     }
 
@@ -134,14 +131,14 @@ public class EncryptionUtils {
     }
 
     /**
-     * Encrypts the UIN through a shared key between the two devices.
-     * @param uin The UIN plaintext to encrypt
+     * Encrypts the payload through a shared key between the two devices.
+     * @param payload The payload plaintext to encrypt
      * @param pubkeyED25519 The remote peer's ED25519 public key
-     * @return Returns a structured message with an encrypted UIN field
+     * @return Returns a structured message with an encrypted payload field
      * @throws JSONException
      * @throws SodiumException
      */
-    public String encrypt(String uin, String pubkeyED25519) throws JSONException, SodiumException {
+    public String encrypt(String payload, String pubkeyED25519) throws JSONException, SodiumException {
         DiffieHellman.Lazy dh = (DiffieHellman.Lazy)lazySodium;
         SecretBox.Lazy box = (SecretBox.Lazy)lazySodium;
         Key publicKey = Key.fromHexString(edPub2curvePub(pubkeyED25519));
@@ -150,9 +147,9 @@ public class EncryptionUtils {
 
         byte[] nonce = lazySodium.nonce(Box.NONCEBYTES);
         JSONObject json = new JSONObject();
-        String euin = box.cryptoSecretBoxEasy(uin, nonce, sharedKey);
+        String ePayload = box.cryptoSecretBoxEasy(payload, nonce, sharedKey);
         json.put("type", "msg");
-        json.put("euin", euin);
+        json.put("ePayload", ePayload);
         json.put("nonce", LazySodium.toHex(nonce));
         json.put("pk", LazySodium.toHex(publicKeyED25519));
 
@@ -160,9 +157,9 @@ public class EncryptionUtils {
     }
 
     /**
-     * Decrypts the euin ciphertext field of the structured message.
+     * Decrypts the encrypted payload field of the structured message.
      * @param jsonPayload The received structured message
-     * @return Returns the UIN string in plaintext
+     * @return Returns the payload string in plaintext
      * @throws JSONException
      * @throws SodiumException
      */
@@ -180,14 +177,14 @@ public class EncryptionUtils {
         }
 
         byte[] nonce = LazySodium.toBin(json.get("nonce").toString());
-        String euin = json.get("euin").toString();
+        String ePayload = json.get("ePayload").toString();
         Key publicKey = Key.fromBytes(curve25519);
 
         Key secretKey = Key.fromBytes(secretKeyCurve25519);
         Key sharedKey = dh.cryptoScalarMult(secretKey, publicKey);
-        String uin = box.cryptoSecretBoxOpenEasy(euin, nonce, sharedKey);
+        String payload = box.cryptoSecretBoxOpenEasy(ePayload, nonce, sharedKey);
 
-        return uin;
+        return payload;
     }
 
     /**
