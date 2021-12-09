@@ -67,3 +67,7 @@ The mechanism to communicate the `params` connection code is up to the applicati
 ## Open source dependencies
 
 - [lazysodium-android](https://github.com/terl/lazysodium-android)
+
+## License
+
+[Apache-2.0 License](LICENSE)
