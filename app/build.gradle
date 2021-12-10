@@ -32,6 +32,10 @@ android {
     buildFeatures {
         viewBinding true
     }
+
+    lintOptions {
+        lintConfig rootProject.file('lint.xml')
+    }
 }
 
 dependencies {
