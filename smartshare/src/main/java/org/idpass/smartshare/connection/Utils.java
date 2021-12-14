@@ -21,6 +21,10 @@ import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -68,4 +72,65 @@ public class Utils {
         return event.toString();
     }
 
+    /**
+     * Splits a huge payload into chunks of 31768 bytes each.
+     *
+     * @param payload A huge payload.
+     * @return Returns a list of chunks of payload.
+     */
+    static public List<String> splitPayload(String payload) {
+        int size = 31768;
+        int n = (payload.length() + size - 1) / size;
+        List<String> chunks = new ArrayList<String>(n);
+        for (int start = 0; start < payload.length(); start += size) {
+            chunks.add(payload.substring(start, Math.min(payload.length(), start + size)));
+        }
+        return chunks;
+    }
+
+    /**
+     * Calculates the MD5 checksum.
+     *
+     * @param text The text data to compute an MD5 checksum from
+     * @return Returns the MD5 checksum of text
+     */
+    static public String md5(String text) {
+        MessageDigest md5 = null;
+        try {
+            md5 = MessageDigest.getInstance("MD5");
+            md5.update(text.getBytes());
+            byte[] buf = md5.digest(); // echo -ne 'apple' | md5
+            return toHexString(buf);
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /**
+     * Converts a hex byte array into its string representation.
+     *
+     * @param byteArray The hex byte array
+     * @return Returns the hex string representation of the byte array
+     */
+    static public String toHexString(byte[] byteArray) {
+        StringBuffer hexStringBuffer = new StringBuffer();
+        for (int i = 0; i < byteArray.length; i++) {
+            hexStringBuffer.append(byteToHex(byteArray[i]));
+        }
+        return hexStringBuffer.toString();
+    }
+
+    /**
+     * Converts a byte into its hex string representation.
+     *
+     * @param num A hex byte value.
+     * @return Returns the hex string representation of num
+     */
+    static public String byteToHex(byte num) {
+        char[] hexDigits = new char[2];
+        hexDigits[0] = Character.forDigit((num >> 4) & 0xF, 16);
+        hexDigits[1] = Character.forDigit((num & 0xF), 16);
+        return new String(hexDigits);
+    }
 }

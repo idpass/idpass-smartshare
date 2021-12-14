@@ -29,6 +29,10 @@ import com.goterl.lazysodium.utils.Key;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.List;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
+
 /**
  * The wrapper class that uses Libsodium's cryptographic primitives.
  */
@@ -228,5 +232,88 @@ public class EncryptionUtils {
             throw new SodiumException("error: ED25519 to Curve25519 conversion");
         }
         return LazySodium.toHex(curve25519);
+    }
+
+    /**
+     * Encrypts payload and chunk it into small pieces. The first chunk type is the
+     * begin chunk that describes the total count of chunks, the size and MD5 of the
+     * payload. It is followed by a series of chunk types with the chunk content
+     * and its fractional percentage relative to the whole. The last is the end chunk
+     * which contains the nonce used to encrypt the payload.
+     *
+     * @param payload The plaintext payload
+     * @param pubkeyED25519 The peer public key
+     * @return Returns chunks of the encrypted payload
+     */
+    public BlockingQueue<JSONObject> chunkPayload(String payload, String pubkeyED25519) {
+        try {
+            DiffieHellman.Lazy dh = (DiffieHellman.Lazy) lazySodium;
+            SecretBox.Lazy box = (SecretBox.Lazy) lazySodium;
+            Key publicKey = Key.fromHexString(edPub2curvePub(pubkeyED25519));
+            Key secretKey = Key.fromBytes(secretKeyCurve25519);
+            Key sharedKey = dh.cryptoScalarMult(secretKey, publicKey);
+
+            byte[] nonce = lazySodium.nonce(Box.NONCEBYTES);
+            String ePayload = box.cryptoSecretBoxEasy(payload, nonce, sharedKey);
+
+            BlockingQueue<JSONObject> outbound = new LinkedBlockingDeque<>();
+            List<String> chunks = Utils.splitPayload(ePayload);
+            float chunksCount = chunks.size();
+
+            JSONObject beginJson = new JSONObject();
+            beginJson.put("type", "begin");
+            beginJson.put("count", chunksCount);
+            beginJson.put("size", payload.getBytes().length);
+            beginJson.put("md5", Utils.md5(payload));
+
+            outbound.add(beginJson);
+            int n = 1;
+            for (String chunk : chunks) {
+                JSONObject chunkJson = new JSONObject();
+                chunkJson.put("type", "chunk");
+                chunkJson.put("percent", n / chunksCount);
+                chunkJson.put("data", chunk);
+                outbound.add(chunkJson);
+                n++;
+            }
+            JSONObject endJson = new JSONObject();
+            endJson.put("type", "end");
+            endJson.put("nonce", LazySodium.toHex(nonce));
+            outbound.add(endJson);
+
+            return outbound;
+        } catch (JSONException | SodiumException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Decrypts the received and encrypted payload.
+     *
+     * @param ePayload The accumulated received and encrypted payload.
+     * @param pubkey The peer public key.
+     * @param nonceStr The nonce used to encrypt the payload
+     * @return Returns the decrypted payload.
+     * @throws JSONException
+     * @throws SodiumException
+     */
+    public String decryptInbound(String ePayload, String pubkey, String nonceStr) throws JSONException, SodiumException {
+        DiffieHellman.Lazy dh = (DiffieHellman.Lazy) lazySodium;
+        SecretBox.Lazy box = (SecretBox.Lazy) lazySodium;
+
+        byte[] ed25519 = LazySodium.toBin(pubkey);
+        byte[] curve25519 = new byte[Sign.CURVE25519_PUBLICKEYBYTES];
+        if (0 != sodium.crypto_sign_ed25519_pk_to_curve25519(curve25519, ed25519)) {
+            throw new SodiumException("error: ED25519 to Curve25519 conversion");
+        }
+
+        byte[] nonce = LazySodium.toBin(nonceStr);
+        Key publicKey = Key.fromBytes(curve25519);
+
+        Key secretKey = Key.fromBytes(secretKeyCurve25519);
+        Key sharedKey = dh.cryptoScalarMult(secretKey, publicKey);
+        String payload = box.cryptoSecretBoxOpenEasy(ePayload, nonce, sharedKey);
+
+        return payload;
     }
 }
