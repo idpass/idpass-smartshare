@@ -40,12 +40,40 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.nio.charset.StandardCharsets;
+import java.util.NoSuchElementException;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
 
 /**
  * The transport layer that is secured by Android's Nearby implementation.
  * The payload is secured by Libsodium's cryptographic library.
  */
 public class BluetoothSecure {
+
+    public enum Mode {
+        advertiser,
+        discoverer,
+        dual
+    }
+
+    public enum Event {
+        ONENDPOINTFOUND,
+        ONENDPOINTLOST,
+        ONCONNECTIONINITIATED,
+        ONCONNECTIONRESULT_SUCCESS,
+        ONCONNECTIONRESULT_FAILED,
+        ONDISCONNECTED,
+        ONTRANSFER_BEGIN,
+        ONTRANSFER_INPROGRESS,
+        ONUPDATEINFO,
+        ONSENT,
+        ONRECEIVED
+    }
+
+    @FunctionalInterface
+    public interface ConnectionEvent {
+        void invoke(Event event, String info);
+    }
 
     @FunctionalInterface
     public interface LogCallback {
@@ -57,18 +85,6 @@ public class BluetoothSecure {
         void invoke(String msg);
     }
 
-    @FunctionalInterface
-    public interface ConnectionCreatedCallback {
-        void invoke();
-    }
-
-    @FunctionalInterface
-    public interface SendCallback {
-        void invoke();
-    }
-
-    private final String transferUpdate[] = new String[]{"SUCCESS", "FAILURE", "IN_PROGRESS", "CANCELED"};
-
     private static final String TAG = BluetoothSecure.class.getName();
     private final String codeName = "residentapp";
     private String receiverName;
@@ -76,15 +92,20 @@ public class BluetoothSecure {
     private String connectionId;
     private boolean doKex;
     private String peerPublicKey;
-    private String btMode;
+    private Mode btMode;
 
     private LogCallback onLogCallback = null;
     private NearbyCallback onNearbyCallback = null;
-    private ConnectionCreatedCallback onConnectionCreatedCallback = null;
-    private SendCallback onSendCallback = null;
     private ConnectionsClient link;
 
     private EncryptionUtils encryptionUtils;
+
+    private ConnectionEvent allEvent = null;
+    private ConnectionEvent transferEvent = null;
+
+    private BlockingQueue<JSONObject> outbound = new LinkedBlockingDeque<>();
+    private StringBuilder inbound = new StringBuilder();
+    private String receivedChunk;
 
     ////////////////////////////
     //  Received payload handler
@@ -94,27 +115,33 @@ public class BluetoothSecure {
         public void onPayloadReceived(@NonNull String endpointId, @NonNull Payload payload) {
             Log.d(TAG, "onPayloadReceived:" + endpointId);
             if (payload.getType() == Payload.Type.BYTES) {
-                String msg = new String(payload.asBytes(), StandardCharsets.UTF_8);
-                emitEventLog("onPayloadReceived:" + endpointId);
-                handleMessage(msg);
-            } else {
-                emitEventLog("Warning: onPayloadReceived not Type.BYTES");
+                receivedChunk = new String(payload.asBytes(), StandardCharsets.UTF_8);
             }
         }
 
         @Override
         public void onPayloadTransferUpdate(@NonNull String endpointId, @NonNull PayloadTransferUpdate payloadTransferUpdate) {
             int status = payloadTransferUpdate.getStatus();
-            Log.d(TAG, String.format("onPayloadTransferUpdate:%s/%d", endpointId, status));
-            emitEventLog(String.format("onPayloadTransferUpdate:%s/%d", endpointId, status));
-            emitEventNearby(Utils.eventJson("transferupdate", transferUpdate[status - 1]));
 
-            if (status == PayloadTransferUpdate.Status.SUCCESS) {
-                if (onSendCallback != null) {
-                    onSendCallback.invoke();
-                    onSendCallback = null;
-                }
+            switch (status) {
+                case PayloadTransferUpdate.Status.SUCCESS:
+                    if (receivedChunk != null) {
+                        handleReceivedMessage(receivedChunk);
+                        receivedChunk = null;
+                    } else {
+                        continueTransmitMessageChunks();
+                    }
+                    break;
+
+                case PayloadTransferUpdate.Status.FAILURE:
+                    emitEventNearby(Utils.eventJson("transferupdate", "-1.0"));
+                    break;
+
+                case PayloadTransferUpdate.Status.CANCELED:
+                    emitEventNearby(Utils.eventJson("transferupdate", "-2.0"));
+                    break;
             }
+
         }
     };
 
@@ -149,6 +176,7 @@ public class BluetoothSecure {
             Log.d(TAG, "onEndpointFound: " + endpointId);
             emitEventLog("onEndpointFound: " + endpointId);
             emitEventNearby(Utils.eventJson("onEndpointFound", endpointId));
+            emitEvent(Event.ONENDPOINTFOUND, null);
             link.requestConnection(codeName, endpointId, lifecycleHandler);
         }
 
@@ -157,6 +185,7 @@ public class BluetoothSecure {
             Log.d(TAG, "onEndpointLost: " + endpoint);
             emitEventLog("onEndpointLost: " + endpoint);
             emitEventNearby(Utils.eventJson("onEndpointLost", endpoint));
+            emitEvent(Event.ONENDPOINTLOST, null);
         }
     };
 
@@ -170,33 +199,28 @@ public class BluetoothSecure {
             emitEventLog("onConnectionInitiated: " + endpointId);
             link.acceptConnection(endpointId, payloadHandler);
             receiverName = connectionInfo.getEndpointName();
+            emitEvent(Event.ONCONNECTIONINITIATED, null);
         }
 
         @Override
         public void onConnectionResult(@NonNull String endpointId, @NonNull ConnectionResolution result) {
             Log.d(TAG, "onConnectionResult: " + endpointId);
+
+            link.stopDiscovery();
+            link.stopAdvertising();
+
             if (result.getStatus().isSuccess()) {
-                link.stopDiscovery();
-                link.stopAdvertising();
                 receiverEndpointId = endpointId;
-
-                if (onConnectionCreatedCallback != null) {
-                    onConnectionCreatedCallback.invoke();
-                    onConnectionCreatedCallback = null;
-                }
-
+                emitEvent(Event.ONCONNECTIONRESULT_SUCCESS, null);
                 if (doKex) {
                     doKex = false;
                     sendPublicKey();
                 }
-
                 emitEventLog("onConnectionResult:success");
             } else {
                 Log.d(TAG, "onConnectionResult: failed");
                 emitEventLog("onConnectionResult: failed");
-
-                link.stopDiscovery();
-                link.stopAdvertising();
+                emitEvent(Event.ONCONNECTIONRESULT_FAILED, null);
                 startMode(btMode);
             }
         }
@@ -206,6 +230,7 @@ public class BluetoothSecure {
             Log.d(TAG, "onDisconnected: " + endpointId);
             emitEventLog("onDisconnected");
             emitEventNearby(Utils.eventJson("onDisconnected", endpointId));
+            emitEvent(Event.ONDISCONNECTED, null);
         }
     };
 
@@ -225,46 +250,6 @@ public class BluetoothSecure {
         link = Nearby.getConnectionsClient(activity);
         onLogCallback = logCallback;
         onNearbyCallback = nearbyCallback;
-        onConnectionCreatedCallback = null;
-        onSendCallback = null;
-    }
-
-    /**
-     * The main parser to handle different types of messages.
-     *
-     * @param msg The received structured message
-     */
-    private void handleMessage(String msg) {
-        try {
-            JSONObject msgObj = new JSONObject(msg);
-            String type = msgObj.get("type").toString();
-            emitEventLog("handleMessage:" + type);
-            switch (type) {
-                case "msg":
-                    String uin = encryptionUtils.decrypt(msg);
-                    emitEventNearby(Utils.eventJson("msg", uin));
-                    break;
-
-                case "kex":
-                    if (encryptionUtils.verifyKexJson(msg)) {
-                        String pk = msgObj.get("pk").toString();
-                        // emitEventNearby(Utils.eventJson("kex", pk));
-                        this.peerPublicKey = pk;
-                        emitEventLog("kex success");
-                    } else {
-                        emitEventLog("kex fail");
-                    }
-                    break;
-
-                default:
-                    emitEventLog("not handleMessage: " + type);
-                    break;
-            }
-        } catch (JSONException e) {
-            emitEventLog("error: handleMessage json");
-        } catch (SodiumException e) {
-            emitEventLog("error handleMessage sodium");
-        }
     }
 
     /**
@@ -290,11 +275,10 @@ public class BluetoothSecure {
      * @param mode The type of signalling mode to use.
      * @return Returns true if the signalling has started
      */
-    private boolean startMode(String mode) {
-        boolean flag = false;
+    private void startMode(Mode mode) {
         emitEventLog("createConnection:" + mode + "/" + connectionId);
         switch (mode) {
-            case "dual":
+            case dual:
                 link.startAdvertising(codeName,
                         connectionId, lifecycleHandler,
                         new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
@@ -302,29 +286,20 @@ public class BluetoothSecure {
                 link.startDiscovery(
                         connectionId, discoveryHandler,
                         new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
-                flag = true;
                 break;
 
-            case "discoverer":
+            case discoverer:
                 link.startDiscovery(
                         connectionId, discoveryHandler,
                         new DiscoveryOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
-                flag = true;
                 break;
 
-            case "advertiser":
+            case advertiser:
                 link.startAdvertising(codeName,
                         connectionId, lifecycleHandler,
                         new AdvertisingOptions.Builder().setStrategy(Strategy.P2P_POINT_TO_POINT).build());
-                flag = true;
-                break;
-
-            default:
-                emitEventLog("createConnection:unknown");
                 break;
         }
-
-        return flag;
     }
 
     // APIs
@@ -412,11 +387,11 @@ public class BluetoothSecure {
      * @param callback This callback will be invoked when a connection is successfully created.
      * @return Returns true if the signalling is in-progress
      */
-    public boolean createConnection(String mode, ConnectionCreatedCallback callback) {
+    public void createConnection(Mode mode, ConnectionEvent callback) {
         Log.d(TAG, "[+createConnection]");
-        onConnectionCreatedCallback = callback;
+        allEvent = callback;
         btMode = mode;
-        return startMode(mode);
+        startMode(mode);
     }
 
     /**
@@ -425,21 +400,17 @@ public class BluetoothSecure {
      * @param msg      The plaintext message to send
      * @param callback This callback is invoked when the message is sent
      */
-    public void send(String msg, SendCallback callback) {
-        emitEventLog("send");
-        onSendCallback = callback;
-        try {
-            if (peerPublicKey != null && peerPublicKey.length() > 0) {
-                String encrypted = encryptionUtils.encrypt(msg, peerPublicKey);
-                link.sendPayload(receiverEndpointId,
-                        Payload.fromBytes(encrypted.getBytes(StandardCharsets.UTF_8)));
-            } else {
-                emitEventLog("error peerPublicKey");
-            }
-        } catch (JSONException e) {
-            emitEventLog(e.getMessage());
-        } catch (SodiumException e) {
-            emitEventLog(e.getMessage());
+    public void send(String msg, ConnectionEvent callback) {
+        transferEvent = callback;
+        if (peerPublicKey != null) {
+            outbound = encryptionUtils.chunkPayload(msg, peerPublicKey);
+            continueTransmitMessageChunks();
+        } else {
+            try {
+                JSONObject j = new JSONObject();
+                j.put("error", "no peerPublicKey");
+                emitEvent(Event.ONUPDATEINFO, j.toString());
+            } catch (JSONException e) {}
         }
     }
 
@@ -452,5 +423,111 @@ public class BluetoothSecure {
         link.disconnectFromEndpoint(receiverEndpointId);
         link.stopAllEndpoints();
         peerPublicKey = null;
+    }
+
+    /**
+     * Pops out the chunks from the queue and transmits them individually.
+     * This method also sends events.
+     */
+    private void continueTransmitMessageChunks() {
+        try {
+            JSONObject toSend = outbound.remove();
+            String chunk = toSend.toString();
+            String type = toSend.getString("type");
+
+            switch (type) {
+                case "begin":
+                    emitEvent(Event.ONTRANSFER_BEGIN, chunk);
+                    break;
+
+                case "chunk":
+                    emitEvent(Event.ONTRANSFER_INPROGRESS, chunk);
+                    double p = toSend.getDouble("percent");
+                    String percent = String.format("%f", p);
+                    emitEventNearby(Utils.eventJson("transferupdate", percent));
+                    break;
+
+                case "end":
+                    emitEvent(Event.ONSENT, null);
+                    break;
+            }
+
+            link.sendPayload(receiverEndpointId,
+                    Payload.fromBytes(chunk.getBytes(StandardCharsets.UTF_8)));
+
+        } catch (NoSuchElementException | JSONException e) {
+        }
+    }
+
+    private void emitEvent(Event event, String info) {
+        if (allEvent != null) allEvent.invoke(event, info);
+        if (transferEvent != null) {
+            switch (event) {
+                case ONTRANSFER_BEGIN:
+                case ONTRANSFER_INPROGRESS:
+                case ONSENT:
+                case ONRECEIVED:
+                    transferEvent.invoke(event, info);
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Handles incoming received chunks of messages. It accumulates received
+     * chunks into the inbound variable and emits an msg event to propagate
+     * the completed received and decrypted payload. This method also handles the
+     * special kex message type used to initialize the peer's public key.
+     *
+     * @param msg A chunk message.
+     */
+    private void handleReceivedMessage(String msg) {
+        try {
+            JSONObject msgObj = new JSONObject(msg);
+            String type = msgObj.get("type").toString();
+
+            switch (type) {
+                case "begin":
+                    inbound.setLength(0);
+                    emitEvent(Event.ONTRANSFER_BEGIN, msgObj.toString());
+                    break;
+
+                case "chunk":
+                    inbound.append(msgObj.getString("data"));
+                    emitEvent(Event.ONTRANSFER_INPROGRESS, msgObj.toString());
+                    double p = msgObj.getDouble("percent");
+                    String percent = String.format("%f", p);
+                    emitEventNearby(Utils.eventJson("transferupdate", percent));
+                    break;
+
+                case "end":
+                    emitEvent(Event.ONRECEIVED, null);
+                    if (inbound.length() > 0) {
+                        try {
+                            String decrypted = encryptionUtils.decryptInbound(inbound.toString(),
+                                peerPublicKey, msgObj.getString("nonce"));
+                            emitEventNearby(Utils.eventJson("msg", decrypted));
+                        } catch (JSONException | SodiumException e) {
+                            JSONObject j = new JSONObject();
+                            j.put("error", "fail decryptInbound");
+                            emitEvent(Event.ONUPDATEINFO, j.toString());
+                        }
+                    }
+                    break;
+
+                case "kex":
+                    if (encryptionUtils.verifyKexJson(msg)) {
+                        this.peerPublicKey = msgObj.get("pk").toString();
+                    } else {
+                        JSONObject j = new JSONObject();
+                        j.put("error", "kex verify error");
+                        emitEvent(Event.ONUPDATEINFO, j.toString());
+                    }
+                    break;
+            }
+
+        } catch (JSONException | SodiumException e) {
+
+        }
     }
 }
