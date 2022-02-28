@@ -23,9 +23,9 @@ import org.json.JSONObject;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 /**
  * Some common generic utility functions
@@ -37,7 +37,7 @@ public class Utils {
         int pauseSeconds = nsec;
         // Randomize it if not supplied
         if (pauseSeconds <= 0) {
-            Random ran = new Random();
+            SecureRandom ran = new SecureRandom();
             pauseSeconds = 9 + ran.nextInt(30);
             Log.d(TAG, "pause " + pauseSeconds);
         }
@@ -53,7 +53,7 @@ public class Utils {
     static String getRandomString(int len) {
         String SALTCHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         StringBuilder salt = new StringBuilder();
-        Random rnd = new Random();
+        SecureRandom rnd = new SecureRandom();
         while (salt.length() < len) { // length of the random string.
             int index = (int) (rnd.nextFloat() * SALTCHARS.length());
             salt.append(SALTCHARS.charAt(index));
@@ -89,17 +89,17 @@ public class Utils {
     }
 
     /**
-     * Calculates the MD5 checksum.
+     * Calculates the hash.
      *
-     * @param text The text data to compute an MD5 checksum from
-     * @return Returns the MD5 checksum of text
+     * @param text The text data to compute a hash from
+     * @return Returns the hash of text
      */
-    static public String md5(String text) {
-        MessageDigest md5 = null;
+    static public String computeHash(String text) {
+        MessageDigest hash = null;
         try {
-            md5 = MessageDigest.getInstance("MD5");
-            md5.update(text.getBytes());
-            byte[] buf = md5.digest(); // echo -ne 'apple' | md5
+            hash = MessageDigest.getInstance("SHA-256");
+            hash.update(text.getBytes());
+            byte[] buf = hash.digest(); // echo -ne 'apple' | sha256sum
             return toHexString(buf);
         } catch (NoSuchAlgorithmException e) {
             e.printStackTrace();
