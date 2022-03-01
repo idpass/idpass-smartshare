@@ -236,7 +236,7 @@ public class EncryptionUtils {
 
     /**
      * Encrypts payload and chunk it into small pieces. The first chunk type is the
-     * begin chunk that describes the total count of chunks, the size and MD5 of the
+     * begin chunk that describes the total count of chunks, the size and hash of the
      * payload. It is followed by a series of chunk types with the chunk content
      * and its fractional percentage relative to the whole. The last is the end chunk
      * which contains the nonce used to encrypt the payload.
@@ -264,7 +264,7 @@ public class EncryptionUtils {
             beginJson.put("type", "begin");
             beginJson.put("count", chunksCount);
             beginJson.put("size", payload.getBytes().length);
-            beginJson.put("md5", Utils.md5(payload));
+            beginJson.put("hash", Utils.computeHash(payload));
 
             outbound.add(beginJson);
             int n = 1;
