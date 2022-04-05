@@ -21,7 +21,7 @@ obj.init(getCurrentActivity(),
 );
 ```
 
-The first app must call [getConnectionParameters](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L144-L166):
+The first app must call [getConnectionParameters](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L163-L175):
 
 ```java
 String params = obj.getConnectionParameters();
@@ -35,7 +35,7 @@ obj.createConnection("dual", () -> {
 });
 ```
 
-The second app must call [setConnectionParameters](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L191-L201):
+The second app must call [setConnectionParameters](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L189-L197):
 
 ```java
 // Get the `params` connection code. For example, visually through
@@ -51,7 +51,7 @@ obj.createConnection("dual", () -> {
 
 
 
-When a connection is created, either app can [send](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L231-L237) a message by:
+When a connection is created, either app can [send](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L243-L261) a message by:
 
 ```java
 obj.send(msg, () -> {
@@ -60,7 +60,7 @@ obj.send(msg, () -> {
 
 ```
 
-The incoming messages, the transfer status of inbound/outbound messages, the connection-related events, and the debug log messages are handled in the callback functions specified in `init`. The [example](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L87-L121) test application shows the handling of these events. 
+The incoming messages, the transfer status of inbound/outbound messages, the connection-related events, and the debug log messages are handled in the callback functions specified in `init`. The [example](https://github.com/idpass/react-native-idpass-smartshare/blob/main/example/src/App.tsx#L100-L141) test application shows the handling of these events. 
 
 The mechanism to communicate the `params` connection code is up to the application. Such mechanism would include, but is not limited to, through a QR code.
 
